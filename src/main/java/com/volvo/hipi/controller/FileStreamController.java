@@ -56,8 +56,8 @@ public class FileStreamController {
         return msg;
     }
 
-    @GetMapping("downlaodattachments")
-    @RequestMapping(value = "downlaodattachments", produces = "application/zip")
+    @GetMapping("downloadattachments")
+    @RequestMapping(value = "downloadattachments", produces = "application/zip")
     public ResponseEntity<StreamingResponseBody> downlaodAttachments(@RequestParam String  reportid ) throws IOException {
         return ResponseEntity
                 .ok()
