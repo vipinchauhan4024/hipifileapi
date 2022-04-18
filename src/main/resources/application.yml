@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: hipifileapi
+  security:
+    user:
+      name: admin
+      password: volvo
+#  security:
+#    oauth2:
+#      client:
+#        provider:
+#          azure-ad:
+#            authorization-uri: https://login.microsoftonline.com/f25493ae-1c98-41d7-8a33-0be75f5fe603/oauth2/v2.0/authorize
+#            token-uri: https://login.microsoftonline.com/f25493ae-1c98-41d7-8a33-0be75f5fe603/oauth2/v2.0/token
+#            jwk-set-uri: https://login.microsoftonline.com/f25493ae-1c98-41d7-8a33-0be75f5fe603/discovery/v2.0/keys
+#        registration:
+#          azure-client:
+#            provider: azure-ad
+#            client-id: b9166330-953e-4e96-a1c3-b5d83e40bdc1
+#            client-secret: C~n7Q~UGHV6A3fQBXfGHJlHYhCTKGgSqMkwiD
+#            authorization-grant-type: authorization_code
+#            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+#            scope: openid,profile
+
+#azure:
+#  activedirectory:
+#    tenant-id: f25493ae-1c98-41d7-8a33-0be75f5fe603
+#    client-id: b9166330-953e-4e96-a1c3-b5d83e40bdc1
+#    client-seceret: C~n7Q~UGHV6A3fQBXfGHJlHYhCTKGgSqMkwiD
+#    user-group:
+#      allowed-groups: VG-AZ-109460-HIPI-OPS
+server:
+  forward-headers-strategy: native
