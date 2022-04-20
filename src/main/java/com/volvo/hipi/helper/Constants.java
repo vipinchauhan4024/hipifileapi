@@ -1,7 +1,7 @@
 package com.volvo.hipi.helper;
 
 public class Constants {
-    public static final String PRIFIX = "protus_";
+    public static final String PRIFIX = "pr_mig_";
 
     private Constants(){}
     public static final String CONTAINERNAME ="protusfiles";//"hipifiles";

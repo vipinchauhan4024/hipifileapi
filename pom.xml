@@ -52,7 +52,6 @@
 		<dependency>
 			<groupId>com.azure</groupId>
 			<artifactId>azure-storage-file-datalake</artifactId>
-		
 		</dependency>
 	</dependencies>
 	<dependencyManagement>

@@ -32,6 +32,7 @@ import com.azure.storage.file.datalake.models.PathItem;
 import com.volvo.hipi.UploadToBlobStorage;
 import com.volvo.hipi.helper.AzureBlobStorageClient;
 import com.volvo.hipi.helper.Constants;
+import java.io.FileWriter;
 
 @RestController
 @RequestMapping("api/v1/")
@@ -69,12 +70,13 @@ public class FileStreamController {
 	@GetMapping("uploadAttachmentsFromDb")
 	@RequestMapping(value = "uploadAttachmentsFromDb")
 	public String uploadAttachmentsFromDb(@RequestParam int minReportId, @RequestParam int maxReportId) {
-		String msg = " Uploaded report from report scope where reportid >= "+ minReportId+" and  reportid <= maxReportId";
+		String msg = " Uploaded report from report scope where reportid >= "+ minReportId+" and  reportid <= "+ maxReportId;
 		try {
 			uploadToBlobStorage.loadAttachmentsFromDb(minReportId, maxReportId);
 		} catch (Exception e) {
 			msg = e.getMessage();
 		}
+		System.out.println(msg);
 		return msg;
 	}
 
@@ -85,8 +87,9 @@ public class FileStreamController {
 				.body(out -> {
 					System.out.println("Download for file started" + reportid);
 					List<File> files = getAttachmentsFromAzureBlob(reportid);
-					try{
 					ZipOutputStream zipOutputStream = new ZipOutputStream(out);
+					try{
+						
 					// create a list to add files to be zipped
 					
 
@@ -101,10 +104,12 @@ public class FileStreamController {
 						zipOutputStream.closeEntry();
 					}
 					zipOutputStream.close();
-
-					
 					System.out.println("downlaod finish");
-					} finally{
+					} catch (Exception e) {
+						String text = "Error occured sorry !! may be report does not have attachments";
+						out.write(text.getBytes());
+					}
+					finally{
 						if (files != null ){
 							for (File file : files) {
 								file.delete();

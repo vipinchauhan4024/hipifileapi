@@ -58,10 +58,10 @@ public class UploadToBlobStorage {
 
         }
     }
-    public void loadAttachments(int reportId, int reportNumber) throws SQLException, IOException {
+    public void loadAttachments(int reportId, int reportNumber) throws Exception {
         Connection conn = BossDbConnection.getDbConnection();
         System.out.println("loading attachments for "+ reportId);
-        String qry = "Select rd.ReportID, rd.BlobDataID, b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd, blobdata b where" +
+        String qry = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd, blobdata b where" +
                 " rd.BlobDataID = b.BlobDataID and rd.ReportID in (?)";
 
         PreparedStatement stmt = conn.prepareStatement(qry);
@@ -70,14 +70,21 @@ public class UploadToBlobStorage {
         ResultSet rs = stmt.executeQuery();
         String bname = "";
         BlobData bdata;
+        String path;
         while (rs.next()) {
             bname = rs.getString("BLOBNAME");
+            int blobdataid= rs.getInt("BlobDataID");
             System.out.println(bname);
-            bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getBlob("BLOBDATA"));
+            bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getInt("Blobdataid"),rs.getBlob("BLOBDATA"));
             if(reportNumber>0){
             	uploadAttachment(bdata, reportNumber+"");
+            	path= Constants.BASE_DIR+reportNumber+"/"+ Constants.PRIFIX+bdata.getBlobDataId()+"_"+bdata.getBlobName();
+            	updateUploadStatus( reportId,  reportNumber,  path, blobdataid);
             } else {
-            	uploadAttachment(bdata, reportId+"");
+            	throw new  Exception ("Report num madatory");
+            	/*uploadAttachment(bdata, reportId+"");
+            	path= Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+bdata.getBlobName();
+            	updateUploadStatus(reportId,  reportNumber,  path);*/
             }
         }
 
@@ -87,13 +94,14 @@ public class UploadToBlobStorage {
         BlobServiceClient blobServiceClient = AzureBlobStorageClient.getAzureBlobStorageClient();
         BlobContainerClient blobContainerClient = blobServiceClient.getBlobContainerClient(Constants.CONTAINERNAME);
         BlockBlobClient blobClient = null;
-        blobClient = blobContainerClient.getBlobClient(Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+blobData.getBlobName()).getBlockBlobClient();
-        
+        String path =Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+blobData.getBlobDataId()+"_"+blobData.getBlobName();
+        System.out.println("uplading :" + path);
+        blobClient = blobContainerClient.getBlobClient(path).getBlockBlobClient();
         InputStream dataStream = new ByteArrayInputStream(blobData.getBlob().getBytes(1, blobData.getBlobSize()));
         blobClient.upload(dataStream, blobData.getBlobSize());
         dataStream.close();
     }
-	public void loadAttachmentsFromDb(int minReportid,int maxReportId) throws SQLException, IOException {
+	public void loadAttachmentsFromDb(int minReportid,int maxReportId) throws Exception {
 		    Connection conn = BossDbConnection.getDbConnection();
 	        System.out.println("load reportids ");
 	        String qry = "select distinct rs.ReportID , rs.reportNo,rs.piltype from ReportDocument rd left OUTER join  reportsInScope rs on rd.ReportID = rs.ReportID where  rs.ReportID >= ? and rs.ReportID <= ?   order by rs.ReportID asc";
@@ -110,6 +118,16 @@ public class UploadToBlobStorage {
 	           // bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getBlob("BLOBDATA"));
 	            //uploadAttachment(bdata, reportId+"");
 	        }
+	}
+	private void updateUploadStatus(int reportId, int reportno, String path, int blobDataId) throws SQLException {
+		Connection conn = BossDbConnection.getDbConnection();
+		String qry = " INSERT INTO MIG_HIPI_ReportAttachment (Attachmentslink, ReportID, ReportNo, BlobDataId) VALUES (?, ?, ?,?) ";
+		PreparedStatement stmt = conn.prepareStatement(qry);
+		stmt.setString(1, path);
+        stmt.setInt(2, reportId);
+        stmt.setInt(3, reportno);
+        stmt.setInt(4, blobDataId);
+        stmt.executeUpdate();
 	}
 }
 
@@ -150,19 +168,31 @@ class BlobData {
     private String blobType;
     private Blob blob;
     private int blobSize;
+    private int blobDataId;
 
-    public BlobData(String blobName, String blobType, int blobSize, Blob blob) {
+    public BlobData(String blobName, String blobType, int blobSize, int blobDataId, Blob blob) {
         this.blob=blob;
         this.blobName =blobName;
         this.blobType =blobType;
         this.blobSize =blobSize;
+        this.blobDataId=blobDataId;
     }
 
     public Blob getBlob() {
         return blob;
     }
 
-    public void setBlob(Blob blob) {
+   
+
+	public int getBlobDataId() {
+		return blobDataId;
+	}
+
+	public void setBlobDataId(int blobDataId) {
+		this.blobDataId = blobDataId;
+	}
+
+	public void setBlob(Blob blob) {
         this.blob = blob;
     }
 
