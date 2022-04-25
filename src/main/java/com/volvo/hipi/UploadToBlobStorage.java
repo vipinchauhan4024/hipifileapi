@@ -14,7 +14,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -22,8 +24,8 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.specialized.BlockBlobClient;
 import com.volvo.hipi.helper.AzureBlobStorageClient;
+import com.volvo.hipi.helper.BossDbConnection;
 import com.volvo.hipi.helper.Constants;
-import com.volvo.hipi.hipifileapi.BossDbConnection;
 
 @Service
 public class UploadToBlobStorage {
@@ -54,14 +56,19 @@ public class UploadToBlobStorage {
             while ((len = in.read(buff)) != -1) {
                 out.write(buff, 0, len);
             }
+            
+            out.close();
 
 
         }
     }
+
+
+	
     public void loadAttachments(int reportId, int reportNumber) throws Exception {
         Connection conn = BossDbConnection.getDbConnection();
         System.out.println("loading attachments for "+ reportId);
-        String qry = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd, blobdata b where" +
+        String qry = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
                 " rd.BlobDataID = b.BlobDataID and rd.ReportID in (?)";
 
         PreparedStatement stmt = conn.prepareStatement(qry);
@@ -69,8 +76,9 @@ public class UploadToBlobStorage {
 
         ResultSet rs = stmt.executeQuery();
         String bname = "";
-        BlobData bdata;
-        String path;
+        BlobData bdata = null;
+        String path="";
+        try{
         while (rs.next()) {
             bname = rs.getString("BLOBNAME");
             int blobdataid= rs.getInt("BlobDataID");
@@ -79,14 +87,18 @@ public class UploadToBlobStorage {
             if(reportNumber>0){
             	uploadAttachment(bdata, reportNumber+"");
             	path= Constants.BASE_DIR+reportNumber+"/"+ Constants.PRIFIX+bdata.getBlobDataId()+"_"+bdata.getBlobName();
-            	updateUploadStatus( reportId,  reportNumber,  path, blobdataid);
+            	updateUploadStatus( reportId,  reportNumber,  path, blobdataid, "Uploaded_to_hipi");
             } else {
             	throw new  Exception ("Report num madatory");
             	/*uploadAttachment(bdata, reportId+"");
             	path= Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+bdata.getBlobName();
             	updateUploadStatus(reportId,  reportNumber,  path);*/
             }
-        }
+			}
+		} catch (Exception e) {
+			updateUploadStatus(reportId, reportNumber, path, bdata != null ? bdata.getBlobDataId(): null, "Error occured in upload");
+			e.printStackTrace();
+		}
 
     }
 
@@ -94,9 +106,11 @@ public class UploadToBlobStorage {
         BlobServiceClient blobServiceClient = AzureBlobStorageClient.getAzureBlobStorageClient();
         BlobContainerClient blobContainerClient = blobServiceClient.getBlobContainerClient(Constants.CONTAINERNAME);
         BlockBlobClient blobClient = null;
-        String path =Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+blobData.getBlobDataId()+"_"+blobData.getBlobName();
-        System.out.println("uplading :" + path);
+        String path = Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX + blobData.getBlobDataId()+ "_" +blobData.getBlobName();
+        System.out.println("uploding :" + path);
         blobClient = blobContainerClient.getBlobClient(path).getBlockBlobClient();
+        
+        
         InputStream dataStream = new ByteArrayInputStream(blobData.getBlob().getBytes(1, blobData.getBlobSize()));
         blobClient.upload(dataStream, blobData.getBlobSize());
         dataStream.close();
@@ -104,34 +118,60 @@ public class UploadToBlobStorage {
 	public void loadAttachmentsFromDb(int minReportid,int maxReportId) throws Exception {
 		    Connection conn = BossDbConnection.getDbConnection();
 	        System.out.println("load reportids ");
-	        String qry = "select distinct rs.ReportID , rs.reportNo,rs.piltype from ReportDocument rd left OUTER join  reportsInScope rs on rd.ReportID = rs.ReportID where  rs.ReportID >= ? and rs.ReportID <= ?   order by rs.ReportID asc";
+	        String qry = "select distinct rs.ReportID , rs.reportNo,rs.piltype from ReportDocument rd "
+	        		+ " WITH (NOLOCK) left OUTER join  reportsInScope rs WITH (NOLOCK) on rd.ReportID = rs.ReportID where  rs.ReportID >= ? and rs.ReportID <= ?   order by rs.ReportID asc";
 	        PreparedStatement stmt = conn.prepareStatement(qry);
 	        stmt.setInt(1, minReportid);
 	        stmt.setInt(2, maxReportId);
 	        ResultSet rs = stmt.executeQuery();
 	        List<ReportInScope> rsList = new ArrayList<>();
 	        ReportInScope report;
+	        Set<Integer>  loadedReports =getAlreadyUplodedReportIds();
 	        while (rs.next()) {
 	        	report = new ReportInScope( rs.getInt("reportNo"), rs.getString("piltype"),  rs.getInt("ReportID"));
-	        	loadAttachments(report.getReportId(),report.getReportNo());
-	        	rsList.add(report);
-	           // bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getBlob("BLOBDATA"));
-	            //uploadAttachment(bdata, reportId+"");
+	        	
+	        	if(loadedReports.contains(report.getReportId())) {
+	        		System.out.println("already loaded so skiping");
+				} else {
+					loadAttachments(report.getReportId(),report.getReportNo());
+		        	rsList.add(report);
+				}
+	        	
+	         
 	        }
 	}
-	private void updateUploadStatus(int reportId, int reportno, String path, int blobDataId) throws SQLException {
+	
+	 private static Set<Integer> getAlreadyUplodedReportIds() throws SQLException {
+		 Connection conn = BossDbConnection.getDbConnection();
+	        System.out.println("load uploaded reports ");
+	        String qry = "select distinct ra.ReportID  from MIG_HIPI_ReportAttachment ra WITH (NOLOCK)  "
+	        		+ "where ra.ReportID >= ? order by ra.ReportID asc";
+	        PreparedStatement stmt = conn.prepareStatement(qry);
+	        stmt.setInt(1, 0);
+	        ResultSet rs = stmt.executeQuery();
+	        Set<Integer> loadedReports = new HashSet<>();
+	        while (rs.next()) {
+	        	loadedReports.add(rs.getInt("ReportID"));
+	        	
+	        }
+	        return loadedReports;
+	      
+		
+	}
+	private void updateUploadStatus(int reportId, int reportno, String path, int blobDataId, String status) throws SQLException {
 		Connection conn = BossDbConnection.getDbConnection();
-		String qry = " INSERT INTO MIG_HIPI_ReportAttachment (Attachmentslink, ReportID, ReportNo, BlobDataId) VALUES (?, ?, ?,?) ";
+		String qry = " INSERT INTO MIG_HIPI_ReportAttachment (Attachmentslink, ReportID, ReportNo, BlobDataId,uploadstatus) VALUES (?, ?, ?,?,?) ";
 		PreparedStatement stmt = conn.prepareStatement(qry);
 		stmt.setString(1, path);
         stmt.setInt(2, reportId);
         stmt.setInt(3, reportno);
         stmt.setInt(4, blobDataId);
+        stmt.setString(5, status);
         stmt.executeUpdate();
 	}
 }
 
-class ReportInScope{
+class ReportInScope implements Comparable<ReportInScope>{
 	    private int reportNo;
 	    private String piltype;
 	    private int reportId;
@@ -160,6 +200,18 @@ class ReportInScope{
 		public void setReportId(int reportId) {
 			this.reportId = reportId;
 		}
+		
+		
+	
+		@Override
+		public String toString() {
+			return "ReportInScope [reportNo=" + reportNo + ", reportId=" + reportId + "]";
+		}
+		@Override
+		public int compareTo(ReportInScope o) {
+			// TODO Auto-generated method stub
+			return reportId - o.getReportId();
+		}
 	    
 	    
 }
@@ -172,7 +224,7 @@ class BlobData {
 
     public BlobData(String blobName, String blobType, int blobSize, int blobDataId, Blob blob) {
         this.blob=blob;
-        this.blobName =blobName;
+        this.blobName =blobName.replaceAll("%", "percentage");;
         this.blobType =blobType;
         this.blobSize =blobSize;
         this.blobDataId=blobDataId;

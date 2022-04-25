@@ -5,6 +5,7 @@ spring:
     user:
       name: admin
       password: volvo
+
 #  security:
 #    oauth2:
 #      client:

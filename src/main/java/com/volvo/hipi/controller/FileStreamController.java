@@ -32,7 +32,6 @@ import com.azure.storage.file.datalake.models.PathItem;
 import com.volvo.hipi.UploadToBlobStorage;
 import com.volvo.hipi.helper.AzureBlobStorageClient;
 import com.volvo.hipi.helper.Constants;
-import java.io.FileWriter;
 
 @RestController
 @RequestMapping("api/v1/")
@@ -57,10 +56,10 @@ public class FileStreamController {
 
 	@GetMapping("uploadAttachments")
 	@RequestMapping(value = "uploadAttachments")
-	public String uploadAttachments(@RequestParam int reportid) {
+	public String uploadAttachments(@RequestParam int reportid,@RequestParam int reportno) {
 		String msg = " Uploaded  ";
 		try {
-			uploadToBlobStorage.loadAttachments(reportid,-1);
+			uploadToBlobStorage.loadAttachments(reportid,reportno);
 		} catch (Exception e) {
 			msg = e.getMessage();
 		}
@@ -75,8 +74,9 @@ public class FileStreamController {
 			uploadToBlobStorage.loadAttachmentsFromDb(minReportId, maxReportId);
 		} catch (Exception e) {
 			msg = e.getMessage();
+			
 		}
-		System.out.println(msg);
+		System.out.println("***************"+msg);
 		return msg;
 	}
 
@@ -119,6 +119,25 @@ public class FileStreamController {
 				});
 
 	}
+	
+	@GetMapping("blobCount")
+	@RequestMapping(value = "blobcount")
+	public int getBlobCount() throws IOException {
+		System.out.println("getting count : ");
+		DataLakeServiceClient dataLakeServiceClient = AzureBlobStorageClient.GetDataLakeServiceClient();
+		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("protusfiles");
+
+		
+		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("files");
+		PagedIterable<PathItem> pageddirIterable= directoryClient.listPaths();
+		java.util.Iterator<PathItem> iterator1 = pageddirIterable.iterator();
+		int count =0;
+		while (iterator1.hasNext()){
+			System.out.println(iterator1.next().getName());
+			count ++;
+		}
+		return count;
+	}
 
 	private List<File> getAttachmentsFromAzureBlob(String reportNo) throws IOException {
 		System.out.println("Downloading files for report : "+reportNo);
@@ -130,6 +149,7 @@ public class FileStreamController {
 		List<File> files = new ArrayList<>();
 		
 		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("files").getSubdirectoryClient(reportNo);
+				
 		PagedIterable<PathItem> pagedIterable = directoryClient.listPaths();
 		java.util.Iterator<PathItem> iterator = pagedIterable.iterator();
 		PathItem item = iterator.next();
