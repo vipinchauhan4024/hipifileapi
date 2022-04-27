@@ -20,15 +20,47 @@ import com.volvo.hipi.helper.Constants;
 
 public class DownloadTolocal {
 
-	   static final String path="files/";
+	   static final String path="MPIFiles1/";
+	   static final String IMAGES ="images";
+	   static final String TUMBNAIL = "thumbnails";
 	   
 	   public static void main(String arg []) throws Exception{
-		   downloadTolocal(122691,538248); 
+		  // downloadTolocal(114208,780990); 
+		   downloadReportImages(114208,780990);
 		   System.out.println("finish ************************* ");
 		   
 	   }
 
+	public static void downloadReportImages(int minReportid, int maxReportId)  throws Exception{
 
+
+	    Connection conn = BossDbConnection.getDbConnection();
+        System.out.println("load reportids ");
+        String qry = "select  distinct ri.ReportID , rs.reportNo,rs.piltype from reportsInScope  rs " 
+        		 +" WITH (NOLOCK) INNER JOIN   reportimage ri WITH (NOLOCK) on rs.ReportID = ri.ReportID where  rs.ReportID >= ? and rs.ReportID <= ?   order by ri.ReportID asc";
+        PreparedStatement stmt = conn.prepareStatement(qry);
+        stmt.setInt(1, minReportid);
+        stmt.setInt(2, maxReportId);
+        ResultSet rs = stmt.executeQuery();
+        List<ReportInScope> rsList = new ArrayList<>();
+        Set<Integer> loadedReports = getAlreadyUplodedReportIds();
+        ReportInScope report;
+        while (rs.next()) {
+        	report = new ReportInScope( rs.getInt("reportNo"), rs.getString("piltype"),  rs.getInt("ReportID"));
+        	if(loadedReports.contains(report.getReportId())) {
+        		System.out.println("already loaded so skiping");
+			} else {
+				downloadReportImagesTolocal(report.getReportId(), report.getReportNo(),IMAGES);
+				downloadReportImagesTolocal(report.getReportId(), report.getReportNo(),TUMBNAIL);
+				rsList.add(report);
+			}
+           // bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getBlob("BLOBDATA"));
+            //uploadAttachment(bdata, reportId+"");
+        }
+
+	
+	}
+	   
 	public static void downloadTolocal(int minReportid, int maxReportId) throws Exception {
 
 	    Connection conn = BossDbConnection.getDbConnection();
@@ -56,6 +88,8 @@ public class DownloadTolocal {
 
 	}
 	
+	
+
 	 private static Set<Integer> getAlreadyUplodedReportIds() throws SQLException {
 		 Connection conn = BossDbConnection.getDbConnection();
 	        System.out.println("load uploaded reports ");
@@ -73,6 +107,73 @@ public class DownloadTolocal {
 	      
 		
 	}
+	 
+	 public static void downloadReportImagesTolocal(int reportId, int reportNumber,String imagesOrThumbnail) throws Exception {
+		    
+	        Connection conn = BossDbConnection.getDbConnection();
+	        System.out.println("loading attachments for "+ reportId);
+	        String qry ="";
+	        if(IMAGES.equals(imagesOrThumbnail)){
+	        	qry  = "Select ri.ReportID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from reportimage ri WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
+	                " ri.BlobDataID = b.BlobDataID and ri.ReportID in (?)";
+	        } else {
+	        	qry ="Select ri.ReportID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from reportimage ri WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
+		                " ri.ThumbnailBlobDataId = b.BlobDataID and ri.ReportID in (?)"; 
+	        }
+
+	        PreparedStatement stmt = conn.prepareStatement(qry);
+	        stmt.setInt(1, reportId);
+
+	        ResultSet rs = stmt.executeQuery();
+	        String bname = "";
+	        BlobData bdata;
+	        int blobdataid = 0;
+	        String filePath = path; 
+	        try{
+	        boolean createDir = true;
+	        
+	        while (rs.next()) {
+	            bname = rs.getString("BLOBNAME");
+	            blobdataid =rs.getInt("BlobDataID");
+	            System.out.println(bname);
+	            bname = bname.replace("?", "");
+	            bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getInt("Blobdataid"),rs.getBlob("BLOBDATA"));
+	            if(reportNumber>0){
+				if (createDir) {
+					File theDir = new File(path + reportNumber);
+					if (!theDir.exists()) {
+						theDir.mkdirs();
+						createDir = false;
+					}
+				}
+			
+				File theImageDir = new File(path + reportNumber+"/"+imagesOrThumbnail);
+				if (!theImageDir.exists()) {
+					theImageDir.mkdir();
+				}
+				File reportidDir = new File(path + reportNumber+"/"+imagesOrThumbnail+"/"+reportId);
+				if(!reportidDir.exists()){
+					reportidDir.mkdir();
+				}
+				
+				filePath =path+reportNumber+"/"+imagesOrThumbnail+"/"+reportId+"/"+Constants.PRIFIX + blobdataid+ "_" +bdata.getBlobName();
+				downloadImageAttachment(filePath,bdata);
+	            //	path= Constants.BASE_DIR+reportNumber+"/"+ Constants.PRIFIX+bdata.getBlobDataId()+"_"+bdata.getBlobName();
+	              updateUploadStatus( reportId,  reportNumber,  filePath, blobdataid,"Downloaded_to_local");
+	            } else {
+	            	throw new  Exception ("Report num madatory");
+	            	/*uploadAttachment(bdata, reportId+"");
+	            	path= Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+bdata.getBlobName();
+	            	updateUploadStatus(reportId,  reportNumber,  path);*/
+	            }
+	        }
+		    }catch(Exception e){
+		    	 e.printStackTrace();
+		    	 updateUploadStatus( reportId,  reportNumber,  filePath, blobdataid,"Error in local download");
+		    	 
+		    }
+
+	    }
 
 
 	public static void downloadTolocalAttachments(int reportId, int reportNumber) throws Exception {
@@ -107,7 +208,7 @@ public class DownloadTolocal {
 						createDir = false;
 					}
 				}
-				filePath =filePath+reportNumber+"/"+Constants.PRIFIX + blobdataid+ "_" +bdata.getBlobName();
+				filePath =path+reportNumber+"/"+Constants.PRIFIX + blobdataid+ "_" +bdata.getBlobName();
 	            downloadAttachment(path,bdata, reportNumber+"", reportId+"");
 	            //	path= Constants.BASE_DIR+reportNumber+"/"+ Constants.PRIFIX+bdata.getBlobDataId()+"_"+bdata.getBlobName();
 	              updateUploadStatus( reportId,  reportNumber,  filePath, blobdataid,"Downloaded_to_local");
@@ -127,6 +228,20 @@ public class DownloadTolocal {
 	    }
     
    
+    static void downloadImageAttachment(String path, BlobData blobData) throws SQLException, IOException {
+        System.out.println("downloading : " + path   );
+        File f = new File(path);
+        final Path destination = Paths.get(path);
+        try (
+            final InputStream in = blobData.getBlob().getBinaryStream();
+        ) {
+            Files.copy(in, destination);
+        } catch (Exception e){
+        	throw e;
+        }
+        
+       
+    }
 
     static void downloadAttachment(String path, BlobData blobData, String reportno, String reportId) throws SQLException, IOException {
   

@@ -62,15 +62,53 @@ public class UploadToBlobStorage {
 
         }
     }
+    
+
+	public void reUploadFailedAttchments(String dir, boolean reloadImages) throws SQLException{
+		 Connection conn = BossDbConnection.getDbConnection();
+	        System.out.println("load reportids ");
+	        String qry = "select reportid,reportno from MIG_HIPI_ReportAttachment where uploadstatus =?";
+	        PreparedStatement stmt = conn.prepareStatement(qry);
+	        stmt.setString(1, "Error in local download");
+	        ResultSet rs = stmt.executeQuery();
+	        ReportInScope report;
+	      String folderpath;
+
+	        String qryThumbail = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
+	                " rd.ThumbnailBlobDataId = b.BlobDataID and rd.ReportID in (?)";
+	        while (rs.next()) {
+	        	report = new ReportInScope( rs.getInt("reportNo"), null,  rs.getInt("ReportID"));
+	        	folderpath =dir+"/"+report.getReportNo()+"/";
+					try {
+						if(!reloadImages){
+						loadAttachments(report.getReportId(), report.getReportNo(),folderpath, null);
+						} else {
+							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadTolocal.IMAGES+"/"+report.getReportId()+"/";
+							loadAttachments(report.getReportId(), report.getReportNo(),folderpath, null);
+							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadTolocal.TUMBNAIL+"/"+report.getReportId()+"/";
+							loadAttachments(report.getReportId(), report.getReportNo(),folderpath, qryThumbail);
+							
+							
+						}
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+	        
+	        }
+	       
+	}
 
 
-	
-    public void loadAttachments(int reportId, int reportNumber) throws Exception {
+    public void loadAttachments(int reportId, int reportNumber, String folderpath ,String overridequery) throws Exception {
         Connection conn = BossDbConnection.getDbConnection();
         System.out.println("loading attachments for "+ reportId);
+      
         String qry = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
                 " rd.BlobDataID = b.BlobDataID and rd.ReportID in (?)";
-
+        if(overridequery != null){
+        	qry =overridequery;
+        }
         PreparedStatement stmt = conn.prepareStatement(qry);
         stmt.setInt(1, reportId);
 
@@ -78,15 +116,15 @@ public class UploadToBlobStorage {
         String bname = "";
         BlobData bdata = null;
         String path="";
-        try{
         while (rs.next()) {
+        	try{
             bname = rs.getString("BLOBNAME");
             int blobdataid= rs.getInt("BlobDataID");
             System.out.println(bname);
             bdata = new BlobData(bname, rs.getString("blobtype"), rs.getInt("BlobSize"),rs.getInt("Blobdataid"),rs.getBlob("BLOBDATA"));
             if(reportNumber>0){
-            	uploadAttachment(bdata, reportNumber+"");
-            	path= Constants.BASE_DIR+reportNumber+"/"+ Constants.PRIFIX+bdata.getBlobDataId()+"_"+bdata.getBlobName();
+            	path = folderpath + Constants.PRIFIX + bdata.getBlobDataId()+ "_" +bdata.getBlobName();
+            	uploadAttachment(bdata, path);
             	updateUploadStatus( reportId,  reportNumber,  path, blobdataid, "Uploaded_to_hipi");
             } else {
             	throw new  Exception ("Report num madatory");
@@ -94,19 +132,21 @@ public class UploadToBlobStorage {
             	path= Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX+bdata.getBlobName();
             	updateUploadStatus(reportId,  reportNumber,  path);*/
             }
+			}catch(Exception e){
+				if(!e.getMessage().contains("BlobAlreadyExists")){
+				updateUploadStatus(reportId, reportNumber, path, bdata != null ? bdata.getBlobDataId(): null, "Error occured in upload");
+				}
+				e.printStackTrace();
 			}
-		} catch (Exception e) {
-			updateUploadStatus(reportId, reportNumber, path, bdata != null ? bdata.getBlobDataId(): null, "Error occured in upload");
-			e.printStackTrace();
-		}
+        }
+		
 
     }
 
-    void uploadAttachment(BlobData blobData, String reportId) throws SQLException, IOException {
+    void uploadAttachment(BlobData blobData,   String path) throws SQLException, IOException {
         BlobServiceClient blobServiceClient = AzureBlobStorageClient.getAzureBlobStorageClient();
         BlobContainerClient blobContainerClient = blobServiceClient.getBlobContainerClient(Constants.CONTAINERNAME);
         BlockBlobClient blobClient = null;
-        String path = Constants.BASE_DIR+reportId+"/"+ Constants.PRIFIX + blobData.getBlobDataId()+ "_" +blobData.getBlobName();
         System.out.println("uploding :" + path);
         blobClient = blobContainerClient.getBlobClient(path).getBlockBlobClient();
         
@@ -115,7 +155,7 @@ public class UploadToBlobStorage {
         blobClient.upload(dataStream, blobData.getBlobSize());
         dataStream.close();
     }
-	public void loadAttachmentsFromDb(int minReportid,int maxReportId) throws Exception {
+	public void loadAttachmentsFromDb(int minReportid,int maxReportId,String dir) throws Exception {
 		    Connection conn = BossDbConnection.getDbConnection();
 	        System.out.println("load reportids ");
 	        String qry = "select distinct rs.ReportID , rs.reportNo,rs.piltype from ReportDocument rd "
@@ -127,13 +167,14 @@ public class UploadToBlobStorage {
 	        List<ReportInScope> rsList = new ArrayList<>();
 	        ReportInScope report;
 	        Set<Integer>  loadedReports =getAlreadyUplodedReportIds();
+	        String folderpath; 
 	        while (rs.next()) {
 	        	report = new ReportInScope( rs.getInt("reportNo"), rs.getString("piltype"),  rs.getInt("ReportID"));
-	        	
+	        	folderpath =dir+"/"+report.getReportNo()+"/";
 	        	if(loadedReports.contains(report.getReportId())) {
 	        		System.out.println("already loaded so skiping");
 				} else {
-					loadAttachments(report.getReportId(),report.getReportNo());
+					loadAttachments(report.getReportId(),report.getReportNo(),folderpath, null);
 		        	rsList.add(report);
 				}
 	        	

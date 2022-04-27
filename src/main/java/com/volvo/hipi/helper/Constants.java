@@ -5,6 +5,6 @@ public class Constants {
 
     private Constants(){}
     public static final String CONTAINERNAME ="protusfiles";//"hipifiles";
-    public static final String BASE_DIR="files/";
+    public static final String BASE_DIR="PPIFiles/";
     public static final String BASE_PATH ="C:\\view\\gitproject\\hipifileapi\\download\\";
 }

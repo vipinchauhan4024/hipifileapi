@@ -56,22 +56,37 @@ public class FileStreamController {
 
 	@GetMapping("uploadAttachments")
 	@RequestMapping(value = "uploadAttachments")
-	public String uploadAttachments(@RequestParam int reportid,@RequestParam int reportno) {
+	public String uploadAttachments(@RequestParam int reportid,@RequestParam int reportno, @RequestParam String dir) {
 		String msg = " Uploaded  ";
 		try {
-			uploadToBlobStorage.loadAttachments(reportid,reportno);
+			String folderpath =dir+"/"+reportno+"/";
+
+			uploadToBlobStorage.loadAttachments(reportid,reportno,folderpath, null);
 		} catch (Exception e) {
 			msg = e.getMessage();
 		}
 		return msg;
 	}
 	
-	@GetMapping("uploadAttachmentsFromDb")
-	@RequestMapping(value = "uploadAttachmentsFromDb")
-	public String uploadAttachmentsFromDb(@RequestParam int minReportId, @RequestParam int maxReportId) {
+	@GetMapping("uploadFailedAttachments")
+	@RequestMapping(value = "uploadFailedAttachments")
+	public String uploadFailedAttachments( @RequestParam String dir) {
+		String msg = " Uploaded Failed ";
+		try {
+			uploadToBlobStorage.reUploadFailedAttchments(dir, true);
+		} catch (Exception e) {
+			msg = e.getMessage();
+		}
+		return msg;
+	}
+	
+	
+	//@GetMapping("uploadAttachmentsFromDb")
+	//@RequestMapping(value = "uploadAttachmentsFromDb")
+	public String uploadAttachmentsFromDb(@RequestParam int minReportId, @RequestParam int maxReportId,@RequestParam String dir) {
 		String msg = " Uploaded report from report scope where reportid >= "+ minReportId+" and  reportid <= "+ maxReportId;
 		try {
-			uploadToBlobStorage.loadAttachmentsFromDb(minReportId, maxReportId);
+			uploadToBlobStorage.loadAttachmentsFromDb(minReportId, maxReportId, dir);
 		} catch (Exception e) {
 			msg = e.getMessage();
 			
@@ -80,13 +95,24 @@ public class FileStreamController {
 		return msg;
 	}
 
-	@GetMapping("downloadattachments")
-	@RequestMapping(value = "downloadattachments", produces = "application/zip")
-	public ResponseEntity<StreamingResponseBody> downlaodAttachments(@RequestParam String reportid) throws IOException {
+	@GetMapping("downloadattachments/MPI")
+	@RequestMapping(value = "downloadattachments/MPI", produces = "application/zip")
+	public ResponseEntity<StreamingResponseBody> downlaodMPIAttachments(@RequestParam String reportid) throws IOException {
+		return downloadReportZipAndSend(reportid,"MPI");
+	}
+	
+	@GetMapping("downloadattachments/PPI")
+	@RequestMapping(value = "downloadattachments/PPI", produces = "application/zip")
+	public ResponseEntity<StreamingResponseBody> downlaodPPIAttachments(@RequestParam String reportid) throws IOException {
+		return downloadReportZipAndSend(reportid,"PPI");
+	}
+	
+	private ResponseEntity<StreamingResponseBody> downloadReportZipAndSend(String reportid, String reportType) {
+
 		return ResponseEntity.ok().header("Content-Disposition", "attachment; filename=\"" + reportid + ".zip\"")
 				.body(out -> {
 					System.out.println("Download for file started" + reportid);
-					List<File> files = getAttachmentsFromAzureBlob(reportid);
+					List<File> files = getAttachmentsFromAzureBlob(reportid, reportType);
 					ZipOutputStream zipOutputStream = new ZipOutputStream(out);
 					try{
 						
@@ -118,8 +144,9 @@ public class FileStreamController {
 					}
 				});
 
-	}
 	
+	}
+
 	@GetMapping("blobCount")
 	@RequestMapping(value = "blobcount")
 	public int getBlobCount() throws IOException {
@@ -128,7 +155,7 @@ public class FileStreamController {
 		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("protusfiles");
 
 		
-		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("files");
+		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("MPIFiles");
 		PagedIterable<PathItem> pageddirIterable= directoryClient.listPaths();
 		java.util.Iterator<PathItem> iterator1 = pageddirIterable.iterator();
 		int count =0;
@@ -139,17 +166,14 @@ public class FileStreamController {
 		return count;
 	}
 
-	private List<File> getAttachmentsFromAzureBlob(String reportNo) throws IOException {
+	private List<File> getAttachmentsFromAzureBlob(String reportNo, String reportType) throws IOException {
 		System.out.println("Downloading files for report : "+reportNo);
 		Date d = new Date(System.currentTimeMillis());
 		String timestamp = d.toString().replaceAll(":", "_");
 		DataLakeServiceClient dataLakeServiceClient = AzureBlobStorageClient.GetDataLakeServiceClient();
 		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("protusfiles");
-
 		List<File> files = new ArrayList<>();
-		
-		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("files").getSubdirectoryClient(reportNo);
-				
+		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient(reportType+"Files").getSubdirectoryClient(reportNo);
 		PagedIterable<PathItem> pagedIterable = directoryClient.listPaths();
 		java.util.Iterator<PathItem> iterator = pagedIterable.iterator();
 		PathItem item = iterator.next();
