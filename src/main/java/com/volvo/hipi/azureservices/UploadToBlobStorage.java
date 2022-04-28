@@ -1,4 +1,4 @@
-package com.volvo.hipi;
+package com.volvo.hipi.azureservices;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -73,8 +73,10 @@ public class UploadToBlobStorage {
 	        ResultSet rs = stmt.executeQuery();
 	        ReportInScope report;
 	      String folderpath;
-
-	        String qryThumbail = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from ReportDocument rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
+	      String qryimage = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from reportimage rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
+	                " rd.BlobDataID= b.BlobDataID and rd.ReportID in (?)";
+	      
+	        String qryThumbail = "Select rd.ReportID, rd.BlobDataID, b.Blobdataid,b.BLOBNAME, b.blobtype,b.blobsize,b.BLOBDATA from reportimage rd WITH (NOLOCK), blobdata b WITH (NOLOCK) where" +
 	                " rd.ThumbnailBlobDataId = b.BlobDataID and rd.ReportID in (?)";
 	        while (rs.next()) {
 	        	report = new ReportInScope( rs.getInt("reportNo"), null,  rs.getInt("ReportID"));
@@ -83,9 +85,9 @@ public class UploadToBlobStorage {
 						if(!reloadImages){
 						loadAttachments(report.getReportId(), report.getReportNo(),folderpath, null);
 						} else {
-							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadTolocal.IMAGES+"/"+report.getReportId()+"/";
-							loadAttachments(report.getReportId(), report.getReportNo(),folderpath, null);
-							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadTolocal.TUMBNAIL+"/"+report.getReportId()+"/";
+							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadFromDBTolocal.IMAGES+"/"+report.getReportId()+"/";
+							loadAttachments(report.getReportId(), report.getReportNo(),folderpath, qryimage);
+							folderpath = dir+"/"+report.getReportNo()+"/"+DownloadFromDBTolocal.TUMBNAIL+"/"+report.getReportId()+"/";
 							loadAttachments(report.getReportId(), report.getReportNo(),folderpath, qryThumbail);
 							
 							

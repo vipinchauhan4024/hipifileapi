@@ -33,6 +33,15 @@
 			<groupId>com.azure</groupId>
 			<artifactId>azure-storage-blob</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.azure</groupId>
+			<artifactId>azure-data-tables</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.azure</groupId>
+			<artifactId>azure-storage-file-datalake</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>net.sourceforge.jtds</groupId>
@@ -49,10 +58,7 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>com.azure</groupId>
-			<artifactId>azure-storage-file-datalake</artifactId>
-		</dependency>
+
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>

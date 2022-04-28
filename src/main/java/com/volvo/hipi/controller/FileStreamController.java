@@ -2,11 +2,7 @@ package com.volvo.hipi.controller;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -21,17 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.azure.core.http.rest.PagedIterable;
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
-import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.file.datalake.DataLakeDirectoryClient;
-import com.azure.storage.file.datalake.DataLakeFileClient;
 import com.azure.storage.file.datalake.DataLakeFileSystemClient;
 import com.azure.storage.file.datalake.DataLakeServiceClient;
 import com.azure.storage.file.datalake.models.PathItem;
-import com.volvo.hipi.UploadToBlobStorage;
+import com.volvo.hipi.azureservices.DownloadFromAzure;
+import com.volvo.hipi.azureservices.UploadToBlobStorage;
 import com.volvo.hipi.helper.AzureBlobStorageClient;
-import com.volvo.hipi.helper.Constants;
 
 @RestController
 @RequestMapping("api/v1/")
@@ -39,25 +31,20 @@ public class FileStreamController {
 
 	@Autowired
 	private UploadToBlobStorage uploadToBlobStorage;
+	
+	@Autowired
+	private DownloadFromAzure downloadFromAzure;
 
-	@GetMapping("filedownlaod")
+	@GetMapping("hello")
 	public String hello() {
-		try {
-			BlobServiceClient blobServiceClient = AzureBlobStorageClient.getAzureBlobStorageClient();
-			BlobContainerClient blobContainerClient = blobServiceClient.getBlobContainerClient(Constants.CONTAINERNAME);
-			BlobClient blobClient = blobContainerClient.getBlobClient("docker.png");
-			String filePath = "C:\\view\\gitproject\\hipifileapi\\download\\";
-			blobClient.downloadToFile(filePath + blobClient.getBlobName(), true);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return "file downloaded";
+		return "hello form hipi file services";
+	
 	}
 
 	@GetMapping("uploadAttachments")
 	@RequestMapping(value = "uploadAttachments")
 	public String uploadAttachments(@RequestParam int reportid,@RequestParam int reportno, @RequestParam String dir) {
-		String msg = " Uploaded  ";
+		String msg = " Uploaded report attachment  ";
 		try {
 			String folderpath =dir+"/"+reportno+"/";
 
@@ -97,24 +84,25 @@ public class FileStreamController {
 
 	@GetMapping("downloadattachments/MPI")
 	@RequestMapping(value = "downloadattachments/MPI", produces = "application/zip")
-	public ResponseEntity<StreamingResponseBody> downlaodMPIAttachments(@RequestParam String reportid) throws IOException {
-		return downloadReportZipAndSend(reportid,"MPI");
+	public ResponseEntity<StreamingResponseBody> downlaodMPIAttachments(@RequestParam String reportno ,@RequestParam String reportid) throws IOException {
+		return downloadReportZipAndSend(reportno,reportid,"MPI");
 	}
 	
 	@GetMapping("downloadattachments/PPI")
 	@RequestMapping(value = "downloadattachments/PPI", produces = "application/zip")
-	public ResponseEntity<StreamingResponseBody> downlaodPPIAttachments(@RequestParam String reportid) throws IOException {
-		return downloadReportZipAndSend(reportid,"PPI");
+	public ResponseEntity<StreamingResponseBody> downlaodPPIAttachments(@RequestParam String reportno ,@RequestParam String reportid) throws IOException {
+		return downloadReportZipAndSend(reportno,reportid,"PPI");
 	}
 	
-	private ResponseEntity<StreamingResponseBody> downloadReportZipAndSend(String reportid, String reportType) {
+	private ResponseEntity<StreamingResponseBody> downloadReportZipAndSend(String reportno ,String reportid, String reportType) {
 
 		return ResponseEntity.ok().header("Content-Disposition", "attachment; filename=\"" + reportid + ".zip\"")
 				.body(out -> {
 					System.out.println("Download for file started" + reportid);
-					List<File> files = getAttachmentsFromAzureBlob(reportid, reportType);
-					ZipOutputStream zipOutputStream = new ZipOutputStream(out);
-					try{
+					List<File> files = null;
+					try {
+						files = downloadFromAzure.getAttachmentsFromAzureBlob( reportno,reportid, reportType);
+					    ZipOutputStream zipOutputStream = new ZipOutputStream(out);
 						
 					// create a list to add files to be zipped
 					
@@ -123,7 +111,7 @@ public class FileStreamController {
 					for (File file : files) {
 						// new zip entry and copying inputstream with file to
 						// zipOutputStream, after all closing streams
-						zipOutputStream.putNextEntry(new ZipEntry(file.getName()));
+						zipOutputStream.putNextEntry(new ZipEntry(file.getName().substring(file.getName().indexOf("pr_mig"))));
 						FileInputStream fileInputStream = new FileInputStream(file);
 						IOUtils.copy(fileInputStream, zipOutputStream);
 						fileInputStream.close();
@@ -138,7 +126,9 @@ public class FileStreamController {
 					finally{
 						if (files != null ){
 							for (File file : files) {
-								file.delete();
+								if (file.exists()) {
+									file.delete();
+								}
 							}
 						}
 					}
@@ -166,57 +156,8 @@ public class FileStreamController {
 		return count;
 	}
 
-	private List<File> getAttachmentsFromAzureBlob(String reportNo, String reportType) throws IOException {
-		System.out.println("Downloading files for report : "+reportNo);
-		Date d = new Date(System.currentTimeMillis());
-		String timestamp = d.toString().replaceAll(":", "_");
-		DataLakeServiceClient dataLakeServiceClient = AzureBlobStorageClient.GetDataLakeServiceClient();
-		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("protusfiles");
-		List<File> files = new ArrayList<>();
-		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient(reportType+"Files").getSubdirectoryClient(reportNo);
-		PagedIterable<PathItem> pagedIterable = directoryClient.listPaths();
-		java.util.Iterator<PathItem> iterator = pagedIterable.iterator();
-		PathItem item = iterator.next();
-		
-		DataLakeFileClient fileClient;
-		File file;
-		String filename;
-		try{
-		while (item != null) {
-			System.out.println(item.getName());
-			filename = item.getName().substring(item.getName().lastIndexOf("/")+1);
-			System.out.println(filename);
-			fileClient = directoryClient.getFileClient(filename);
-			
-			file = new File(timestamp + filename);
-			copyInputStreamToFile(fileClient.openInputStream().getInputStream(),file);
-
-			files.add(file);
-			if (!iterator.hasNext()) {
-				break;
-			}
-			item = iterator.next();
-		}
-
-		} catch(Exception e){
-			e.printStackTrace();
-		}
-		return files;
-	}
 	
-	 private static void copyInputStreamToFile(InputStream inputStream, File file)
-	            throws IOException {
-
-	        // append = false
-	        try (FileOutputStream outputStream = new FileOutputStream(file, false)) {
-	            int read;
-	            byte[] bytes = new byte[8192];
-	            while ((read = inputStream.read(bytes)) != -1) {
-	                outputStream.write(bytes, 0, read);
-	            }
-	        }
-
-	    }
+	
 
 	@GetMapping(path = "greeting")
 	public String getGreeting() {

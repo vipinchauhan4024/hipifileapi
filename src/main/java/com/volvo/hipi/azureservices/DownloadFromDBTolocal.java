@@ -1,4 +1,4 @@
-package com.volvo.hipi;
+package com.volvo.hipi.azureservices;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,20 +18,20 @@ import java.util.Set;
 import com.volvo.hipi.helper.BossDbConnection;
 import com.volvo.hipi.helper.Constants;
 
-public class DownloadTolocal {
+public class DownloadFromDBTolocal {
 
 	   static final String path="MPIFiles1/";
 	   static final String IMAGES ="images";
 	   static final String TUMBNAIL = "thumbnails";
 	   
-	   public static void main(String arg []) throws Exception{
+	/*   public static void main(String arg []) throws Exception{
 		  // downloadTolocal(114208,780990); 
 		   downloadReportImages(114208,780990);
 		   System.out.println("finish ************************* ");
 		   
-	   }
+	   }*/
 
-	public static void downloadReportImages(int minReportid, int maxReportId)  throws Exception{
+	public static void downloadReportImagesFromDB(int minReportid, int maxReportId)  throws Exception{
 
 
 	    Connection conn = BossDbConnection.getDbConnection();
@@ -61,7 +61,7 @@ public class DownloadTolocal {
 	
 	}
 	   
-	public static void downloadTolocal(int minReportid, int maxReportId) throws Exception {
+	public static void downloadAttachmentFromDB(int minReportid, int maxReportId) throws Exception {
 
 	    Connection conn = BossDbConnection.getDbConnection();
         System.out.println("load reportids ");
@@ -230,7 +230,6 @@ public class DownloadTolocal {
    
     static void downloadImageAttachment(String path, BlobData blobData) throws SQLException, IOException {
         System.out.println("downloading : " + path   );
-        File f = new File(path);
         final Path destination = Paths.get(path);
         try (
             final InputStream in = blobData.getBlob().getBinaryStream();
@@ -247,7 +246,6 @@ public class DownloadTolocal {
   
         path = path+reportno+"/"+Constants.PRIFIX + blobData.getBlobDataId()+ "_" +blobData.getBlobName();
         System.out.println("downloading :" + path  +"report id "+ reportId );
-        File f = new File(path);
         final Path destination = Paths.get(path);
         try (
             final InputStream in = blobData.getBlob().getBinaryStream();
@@ -271,6 +269,8 @@ public class DownloadTolocal {
         stmt.setString(5, status);
         stmt.executeUpdate();
 	}
+	
+	
 
 
 }
