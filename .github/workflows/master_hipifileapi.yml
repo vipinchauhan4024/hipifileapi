@@ -49,5 +49,5 @@ jobs:
         with:
           app-name: 'HipiFileApi'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_36C122FA2D0B421EA4B2BD22CE3E9EF0 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_F843C76CEFB244A9884AF25F384F294E }}
           package: '*.jar'
