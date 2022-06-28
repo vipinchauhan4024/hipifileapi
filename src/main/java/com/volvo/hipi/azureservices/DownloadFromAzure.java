@@ -80,19 +80,20 @@ public class DownloadFromAzure {
 		}
 		Set<String> reportIdAttachmentBlobIds = new HashSet<>();//getBlobIdsForReportIdNum(reportNo,reportId,reportType);
 		Date d = new Date(System.currentTimeMillis());
-		//connectToUrl("https://portal.azure.com");
-		//connectToUrl("https://portal.azure.com/hipifilesadlgen2.dfs.core.windows.net");
+		connectToUrl("https://portal.azure.com");
+		connectToUrl("http://portal.azure.com/hipifilesadlgen2.dfs.core.windows.net");
 		String timestamp = d.toString().replaceAll(":", "_");
 		DataLakeServiceClient dataLakeServiceClient = AzureBlobStorageClient.GetDataLakeServiceClient();
 
 
 
-		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("hipi");
+		DataLakeFileSystemClient dataLakeFileSystemClient = dataLakeServiceClient.getFileSystemClient("protusfiles");//("hipi");
 		System.out.println("file system "+dataLakeFileSystemClient.getFileSystemUrl());
 		List<File> files = new ArrayList<>();
 
 
-		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("Attachments").getSubdirectoryClient(reportType+"Files").getSubdirectoryClient(reportNo);
+		//DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient("Attachments").getSubdirectoryClient(reportType+"Files").getSubdirectoryClient(reportNo);
+		DataLakeDirectoryClient directoryClient = dataLakeFileSystemClient.getDirectoryClient(reportType+"Files").getSubdirectoryClient(reportNo);
 
 
 		System.out.println(directoryClient.getDirectoryUrl());
@@ -379,7 +380,7 @@ public class DownloadFromAzure {
 	    	Date d = new Date(System.currentTimeMillis());
 	    	String timestamp = d.toString().replaceAll(":", "_");
 			List<File> files = new ArrayList<>();
-			BlobContainerClient bclient = AzureBlobStorageClient.getAzureBlobContainerClient("hipi");
+			BlobContainerClient bclient = AzureBlobStorageClient.getAzureBlobContainerClient("protusfiles");//("hipi");
 			//bclient.getBlobClient("PPIFiles")
 			System.out.println("***************************bclient**************" +bclient);
 			logger.info("***************************bclient**************"+bclient);
