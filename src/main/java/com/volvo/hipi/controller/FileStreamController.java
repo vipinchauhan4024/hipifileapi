@@ -40,6 +40,12 @@ public class FileStreamController {
 		return "hello form hipi file services";
 	
 	}
+	
+	@GetMapping("Hi")
+	public String hi() {
+		return "hi";
+	
+	}
 
 	@GetMapping("uploadAttachments")
 	@RequestMapping(value = "uploadAttachments")
@@ -120,8 +126,10 @@ public class FileStreamController {
 					zipOutputStream.close();
 					System.out.println("downlaod finish");
 					} catch (Exception e) {
+						e.printStackTrace();
 						String text = "Error occured sorry !! may be report does not have attachments";
 						out.write(text.getBytes());
+						System.out.println(e.getMessage());
 					}
 					finally{
 						if (files != null ){
