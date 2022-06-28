@@ -100,8 +100,6 @@ public class DownloadFromAzure {
 		logger.info("directoryClient: "+directoryClient.getDirectoryUrl());
 		DataLakeFileClient fileClient ;
 		File file;
-
-
 		PagedIterable<PathItem> pagedIterable = directoryClient.listPaths();//directoryClient.listPaths(false, false, 100, java.time.Duration.ofMillis(100000l));
 		logger.info("pagedIterable 1: "+pagedIterable);
 		java.util.Iterator<PathItem> iterator = pagedIterable.iterator();
